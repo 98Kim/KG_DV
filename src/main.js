@@ -9,8 +9,12 @@ import axios from 'axios'
 
 Vue.config.productionTip = false
 Vue.prototype.$axios = axios
-axios.defaults.baseURL = '/Industry_graph'
 
+axios.defaults.baseURL = '/Industry_graph' //这个路径会在config/index.js 中进行跨域访问，用于本地开发时。
+
+//打包部署用这一句
+//axios.defaults.baseURL = '/api/query/Industry_graph/'
+//服务器配置上有api这个路径做跨域访问
 
 /* eslint-disable no-new */
 new Vue({

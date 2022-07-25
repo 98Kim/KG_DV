@@ -1,6 +1,7 @@
 <template>
   <div>
-    <div ref="myPage" style="height:150px; border-bottom: #efefef solid 1px;color: #555555;font-size: 12px;"  >
+    <!--上边栏-->
+    <div ref="myPage" style="height:150px; border-bottom: #efefef solid 1px;color: #555555;font-size: 12px;"  > 
       <div style="display: inline-block; margin-left:300px ">
         <div style="line-height: 20px; font-size: 16px; margin-right:10px"><b>布局</b></div>
         <el-radio-group v-model="route" size="mini" class="inline-block" @change="change_layout">
@@ -11,25 +12,25 @@
       
       <div style="float:right; display: inline-block; width:300px">
         <div style="line-height: 20px; font-size: 16px; display: inline-block;"><b>搜索：</b></div>
-        <el-autocomplete v-model="place_holder"  size="mini" :fetch-suggestions="query_search" placeholder="请输入要查找的节点" @select="handleSelect" :debounce="0" :trigger-on-focus="false" clearable @clear="blurForBug()">
+        <el-autocomplete v-model="place_holder"  size="mini" :fetch-suggestions="query_search" placeholder="请输入要查找的节点" @select="handle_select" :debounce="0" :trigger-on-focus="false" clearable @clear="blur_for_bug()">
           <div><span>更多</span></div>
-          <template slot-scope="{item}" >
+          <template slot-scope="{item}" > <!--搜索时，下拉菜单中的推荐的格式-->
             <div style="height:45px margin-top:10px">
-              <div class="name" v-bind:style="{ color: colorDict[item.data.type]}"  >{{ item.value }}</div>
+              <div class="name" v-bind:style="{color: color_dict[item.data.type]}" >{{ item.value }}</div>
               <div class="type"><span>{{ item.data.type }}</span></div>
             <hr/>
             </div>
           </template>
         </el-autocomplete>
       </div>
-  
+      
+      <!-- 根据路径选择的不同，上边栏显示的内容也有所不同  -->
       <div v-if="route =='/graph'" style="margin-top:10px">
         <div v-if="all_node_types.length > 0 " style="line-height: 20px; font-size: 16px;"><b>节点筛选</b></div>
         <el-checkbox-group v-model="node_checkList" @change="doFilter">
           <el-checkbox v-for="thisItem in all_node_types" :key="thisItem" :label="thisItem" />
         </el-checkbox-group>
       </div>
-
 
       <div v-if="route =='/graph'" style="margin-top:10px">
         <div v-if="all_rel_type.length > 0" style="line-height: 20px; font-size: 16px;"><b>关系筛选</b></div>
@@ -40,16 +41,15 @@
       
       <div v-if="route =='/tree'" style="margin-top:30px">
         <div v-if="all_node_types.length > 0" style="line-height: 20px; font-size: 16px;" ><b>筛选</b></div>
-        <el-checkbox-group v-model="node_checkList"  @change="setTreeData">
+        <el-checkbox-group v-model="node_checkList"  @change="tree_change_data">
           <el-checkbox v-for="thisItem in all_node_types" :key="thisItem" :label="thisItem"/>
         </el-checkbox-group>
       </div>
-      
-
     </div>
+    
+    <!-- 图显示部分-->
     <div style="margin-top:0px;width: calc(100% - 10px);height:calc(100vh - 200px);" @click="isShowNodeMenuPanel = false; isShowNodeTipsPanel = false" >
-
-
+      <!-- relation-graph组件设定 -->
       <SeeksRelationGraph
         ref="seeksRelationGraph"
         :options="graph_op"
@@ -58,60 +58,47 @@
         :on-node-expand="onNodeExpand"
       > 
       </SeeksRelationGraph>
+      <!--原来的，点击节点后跳出的操作菜单，现已被注释，不会显现-->
       <div v-show="isShowNodeMenuPanel" :style="{left: nodeMenuPanelPosition.x + 'px', top: nodeMenuPanelPosition.y + 'px' }" style="z-index: 999;padding:10px;background-color: #ffffff;border:#eeeeee solid 1px;box-shadow: 0px 0px 8px #cccccc;position: absolute;">
         <div style="line-height: 25px;padding-left: 10px;color: #888888;font-size: 12px;">操作：</div>
         <div class="c-node-menu-item" @click.stop="doAction('details')">节点详情</div>
         <div class="c-node-menu-item" @click.stop="doAction('setRoot')">设为根节点</div>
-     </div>
-      <el-drawer
-      title="node option:"
-      direction="rtl"
-      size="50%"
-      custom-class="c-drawer-window"
-      :modal="false"
-      :visible.sync="isShowCodePanel"
-      :with-header="false"
-    >
-        <iframe src="/relation-graph-codes/Demo4Logo.html" width="100%" height="100%" frameborder="0" scrolling="auto" style="" />
-      </el-drawer>
+      </div>
     </div>
-    
+    <!--原来的，详情显示，显示node.data中的全部内容（可根据需要进行更改），现已被注释，不会显现-->
     <div v-if="isShowNodeTipsPanel" :style="{left: nodeMenuPanelPosition.x + 'px', top: nodeMenuPanelPosition.y + 'px' }" style="z-index: 999;padding:10px;background-color: #ffffff;border:#eeeeee solid 1px;box-shadow: 0px 0px 8px #cccccc;position: absolute;">
-      <div style="line-height: 25px;padding-left: 10px;color: #888888;font-size: 15px;text-align:left" v-for="(v, k) in currentNode.data" :key="k" :label="k">{{k}}:{{v}}</div>
+      <div style="line-height: 25px;padding-left: 10px;color: #888888;font-size: 15px;text-align:left" v-for="(v, k) in current_node.data" :key="k" :label="k">{{k}}:{{v}}</div>
     </div>
-
   </div>
 </template>
 
 <script>
-import SeeksRelationGraph from '../../relation-graph/index.js'
+//由于更改了部分relation-graph源码，现从本地的路径引入。
+import SeeksRelationGraph from '../../relation-graph/index.js' 
 export default {
   name: 'SeeksRelationGraphDemo',
-  components: { SeeksRelationGraph },
+  components: {SeeksRelationGraph},
   data() {
-
     return {
-      g_loading: true,
-      isShowCodePanel: false,
-      isShowNodeMenuPanel: false,
-      isShowNodeTipsPanel: false,
-      nodeMenuPanelPosition: { x: 0, y: 0 },
-      currentNode: {},
-      rootNode: {},
-      nodes_buffer : {},
-      route:'/graph',
-      node_checkList:[],
-      all_node_types:[],
-      rel_checkList: [],
-      all_rel_type: [],
-      links_id: [],
-      last_checklist: [],
-      place_holder:'',
-      load_num: 6,
-      data_buffer: {}, // 当搜索某一节点相连的所有节点和边时，一次性将数据放到这里。格式为 {'节点id':{'相邻节点类型':[ [[node1,edge1],[node2,edge2],...],   from]}    }
+      isShowNodeMenuPanel: false,                         //当对节点进行点击出现操作界面时的属性//
+      isShowNodeTipsPanel: false,                         //       现根据需求，已被注释        //
+      nodeMenuPanelPosition: { x: 0, y: 0 },              //       目前的版本用不到           //
+
+      current_node: {},   //当前点击节点
+      root_node: {},      //根节点的数据，不是获得图中根节点的对象
+      route:'/graph',     //基本等同于this.$route.path。特殊处: route绑定了 布局的图状和树状加载按钮，如果访问/ 则默认为/graph
+      node_checkList:[],  //打钩的节点类别
+      all_node_types:[],  //所有节点的类别，树形布局时，不会检测根本身的类别，且实际存储为[Product(num),...],num为一共有多少个该类的邻节点。图状存储没有num[Product]
+      rel_checkList: [],  //打钩的边类别
+      all_rel_type: [],   //所有边类别
+      links_id: [],       //自定义的一个边id数组，用途为防止重复边的加载，id=fromid + toid
+      last_checklist: [], //树形布局时，上一次的选中值，用于判断某类别节点的显示和隐藏
+      place_holder: '',   //搜索框的placeholder
+      load_num: 6,        //一次加载的节点数，当待加载数大于load_num时，会逐步进行加载，目前图和树的逐步加载都是6。
+      data_buffer: {}, // 当搜索某一节点相连的所有节点和边时，一次性将数据放到这里。格式为 {'节点id':{'相邻节点类型':[ [[node1,edge1],[node2,edge2],...],   from]}}
                        // 其中from为该从哪里继续加载节点和边，初始为0。node和edge成对出现(因为edge的另一侧是节点id)
       all_colors: [
-        '#ff6900',//orange500
+        '#ff6900',//orange500 富途设计中台颜色色号
         '#788aa0',//grayblue400
         '#478eff',//blue450
         '#ff4a46',//red400
@@ -123,7 +110,8 @@ export default {
         '#debd85',//gold400
         '#76e9f9' //cyan400
       ],
-      colorDict : {},
+      color_dict : {}, //颜色字典，每一种节点类别对应不同的颜色，现逻辑为在parse节点时，自动根据节点的类别是否存在字典中进行颜色加载。按照all_colors中的顺序，目前支持11类。
+      //树、图布局，详情请查文档
       graph_op: {
         defaultNodeBorderWidth: 1,
         defaultNodeFontColor: 'black',
@@ -182,6 +170,7 @@ export default {
     //当路径变化时，重新加载根节点和对应的数据
     //重新设置根节点时的函数调用实际为更改路径，该函数会自动根据路径变化进行调整
     listen_to_set(){
+      //路径变化时，初始一些数据的存储
       var search = this.$route.query.root
       this.place_holder = search
       this.data_buffer = {}
@@ -192,12 +181,15 @@ export default {
       this.all_node_types = []
       this.rel_checkList = []
       this.all_rel_type = []
+      this.color_dict = {}
 
-      if(this.$route.path == '/'){this.route = '/graph'}
+      if(this.$route.path == '/'){this.route = '/graph'} // 当路径为/，默认选中图状按钮 
       this.set_layout(this.route)
       this.get_query_nodes(search)
       .then(res=>{
         var root
+        // res实为一个nodes数组，返回符合查询search的所有节点
+        // 如下是判断选中哪个为根节点的逻辑，可根据需求进行更改
         if(res.length == 1){
           root = res[0]
         }else{
@@ -214,12 +206,12 @@ export default {
       .then(res=>{
         if(res != undefined){
           var root = res
-          this.rootNode = root
+          this.root_node = root
           var __graph_json_data = {'rootId':root['id'], 'nodes':[root], links:[]}
           this.$refs.seeksRelationGraph.setJsonData(__graph_json_data, (seeksRGGraph) => {
-            var root = this.$refs.seeksRelationGraph.getNodeById(this.rootNode.id)
+            var root = this.$refs.seeksRelationGraph.getNodeById(this.root_node.id) //获取图中根节点对象
             root['expanded'] = true 
-            this.searchFrom(this.rootNode.data.type, this.rootNode.id)
+            this.get_data_from(this.root_node.data.type, this.root_node.id)
           })
         }
       })
@@ -244,12 +236,10 @@ export default {
 
     //点击布局按钮进行布局路径跳转
     change_layout(){ 
-      this.node_checkList = []
-      this.all_node_types = []
       this.$router.push({
           path: this.route,
-          query:{root:this.rootNode.text,
-                 type:this.rootNode.data.type
+          query:{root:this.root_node.text,
+                 type:this.root_node.data.type
           }
       })
     },
@@ -266,13 +256,15 @@ export default {
       node['data'] = {}
       node['data']['vid'] = node['id']
       node['data']['type'] = node_info['v_type']
-      node['data']['needLoad'] = true
-      if(node['data']['type'] in this.colorDict){
-        node.color = this.colorDict[node['data']['type']]
+      node['data']['need_load'] = true
+      //根据color_dict设置节点的颜色
+      if(node['data']['type'] in this.color_dict){
+        node.color = this.color_dict[node['data']['type']]
       }else{
-        node.color = this.all_colors[Object.keys(this.colorDict).length]
-        this.colorDict[node['data']['type']] = node.color
+        node.color = this.all_colors[Object.keys(this.color_dict).length]
+        this.color_dict[node['data']['type']] = node.color
       }
+      //把从后端返回的节点的attributes放入前端的data中，作为详情的显示内容
       for(var key in node_info['attributes']){
         if(key == 'name'){continue}
         node['data'][key] = node_info['attributes'][key]
@@ -280,21 +272,25 @@ export default {
       return node
     },
 
-    parse_edge(edgesInfo){
+    //
+    parse_edge(edge_info){
       var link = {}
-      if(this.links_id.includes(edgesInfo['from_id'] + edgesInfo['to_id'])){
+      //查看该边是否加载过，防止重复，若重复返回{}
+      if(this.links_id.includes(edge_info['from_id'] + edge_info['to_id'])){
         return link
       }else{
-        this.links_id.push(edgesInfo['from_id'] + edgesInfo['to_id'])
+        this.links_id.push(edge_info['from_id'] + edge_info['to_id'])
       }
-      link['from'] = edgesInfo['from_id']
-      link['to'] = edgesInfo['to_id']
-      link['text'] = edgesInfo['e_type']
-      if ('business' in edgesInfo['attributes']){
-        link['text'] = edgesInfo['attributes']['business']
+      link['from'] = edge_info['from_id']
+      link['to'] = edge_info['to_id']
+      //后端返回的边都有e_type，此处默认显示e_type
+      //若该边有business在attributes中，优先显示business
+      link['text'] = edge_info['e_type']
+      if ('business' in edge_info['attributes']){
+        link['text'] = edge_info['attributes']['business']
       }
       link['data'] = {}
-      link['data']['type'] = edgesInfo['e_type']
+      link['data']['type'] = edge_info['e_type']
       return link
     },
 
@@ -303,6 +299,7 @@ export default {
     //使用时需要 this.get_nodes_links(type, id).then(res=>{ 后续的操作 }), res是这个函数的返回值
     async get_nodes_links(type, id){
       var query = ''
+      //目前后端的api，要根据id和type查询
       switch (type){
         case 'Company':
           query = 'search_company_linked_vertex?C='
@@ -355,7 +352,7 @@ export default {
           }
         }
       }).catch((err) => {
-          console.log(err)
+        console.log(err)
       })
       return nodes
     },
@@ -373,48 +370,9 @@ export default {
         })
       }
     },
-
-    onNodeClick(nodeObject, $event) {
-      this.currentNode = nodeObject
-      if(this.currentNode.text.indexOf('加载剩余') != -1){
-        var from_id = this.currentNode.id.slice(0, this.currentNode.id.indexOf('load_all'))
-        var remain = this.count_all_remain(from_id)
-        if(this.route == '/tree'){
-          var key_list = this.get_selected_types()
-        }else{
-          var key_list = Object.keys(this.data_buffer[from_id])
-        }
-        if(remain <= this.load_num){
-          this.$refs.seeksRelationGraph.removeNodeById(this.currentNode.id)
-          this.graph_data_loader(from_id, remain, key_list)
-        }else{
-          var left = remain-this.load_num
-          this.graph_data_loader(from_id, this.load_num, key_list)
-          this.currentNode['text'] = "加载剩余(" + left +')'
-        }                
-      }else{
-        this.$router.push({
-          path: this.route,
-          query:{root:this.currentNode.text,
-                 type:this.currentNode.data.type
-          }
-        })
-        /*  
-        var _base_position = this.$refs.myPage.getBoundingClientRect()
-        console.log('showNodeMenus:', $event, _base_position)
-        this.isShowNodeMenuPanel = true
-        this.nodeMenuPanelPosition.x = $event.clientX - _base_position.x
-        this.nodeMenuPanelPosition.y = $event.clientY - _base_position.y
-        console.log('onNodeClick:', nodeObject)*/
-
-      }
-    },
-
-    onLineClick(lineObject, $event) {
-      console.log('onLineClick:', lineObject)
-    },
-
-    handleSelect(item) {
+    
+    //在搜索推荐菜单中选中，实现路径跳转
+    handle_select(item) {
       this.$router.push({
           path: this.route,
           query:{root:item.text,
@@ -422,20 +380,92 @@ export default {
           }
       })
     },
-     
-    blurForBug(){
+    
+    //清空搜索框
+    blur_for_bug(){
       document.activeElement.blur()
     },
 
+    //当点击节点时调用
+    onNodeClick(nodeObject, $event) {
+      this.current_node = nodeObject
+      if(this.current_node.text.indexOf('加载剩余') != -1){
+        //当点击的节点为加载节点时
+        var from_id = this.current_node.id.slice(0, this.current_node.id.indexOf('load_all')) 
+        var remain = this.count_all_remain(from_id)
+        if(this.route == '/tree'){
+          //当布局为tree时，remain为！选中！的type还共能加载多少个
+          var key_list = this.get_selected_types()
+          remain = 0
+          for (var i=0; i<key_list.length;i++){
+            remain += this.count_type_remain(from_id,key_list[i])
+          }
+        }else{
+          var key_list = Object.keys(this.data_buffer[from_id])
+        }
+        if(remain <= this.load_num){
+          //剩余节点可一次性加载完
+          this.$refs.seeksRelationGraph.removeNodeById(this.current_node.id)
+          this.data_loader(from_id, remain, key_list)
+        }else{
+          //剩余节点不可一次性加载完
+          this.data_loader(from_id, this.load_num, key_list)
+          .then(res=>{
+            this.remain_node_change(this.current_node.id, from_id,key_list)
+          })
+        }                
+      }else{
+        //当点击节点为正常节点时，重设根节点，实现路径跳转
+        this.$router.push({
+          path: this.route,
+          query:{root:this.current_node.text,
+                 type:this.current_node.data.type
+          }
+        })
+        //原版本，点击后出现操作栏
+        /*  
+        var _base_position = this.$refs.myPage.getBoundingClientRect()
+        console.log('showNodeMenus:', $event, _base_position)
+        this.isShowNodeMenuPanel = true
+        this.nodeMenuPanelPosition.x = $event.clientX - _base_position.x
+        this.nodeMenuPanelPosition.y = $event.clientY - _base_position.y
+        console.log('onNodeClick:', nodeObject)*/
+      }
+    },
+    
+    
+    //处理"加载剩余节点"变化
+    remain_node_change(remain_id, to_load_id, type_list){
+      var load = this.$refs.seeksRelationGraph.getNodeById(remain_id) //获取“加载剩余”的节点对象
+      var count = 0 
+      // 计算要加载的节点，type_list中的类，还可以加载多少个
+      for(var i=0; i<type_list.length; i++){
+        count += this.count_type_remain(to_load_id, type_list[i])
+      }
+      if(count > 0){
+        load.isHide = false
+        load.text = '加载剩余('+count+')'
+      }else{
+        load.isHide = true
+      }
+    },
+    
+    //点击边调用
+    onLineClick(lineObject, $event) {
+      console.log('onLineClick:', lineObject)
+    },
+    
+
+    //原版本，点击节点后出现操作菜单、显示详情等函数
     /*
     showNodeTips(nodeObject) {
-      this.currentNode = nodeObject
+      this.current_node = nodeObject
       var _base_position = this.$refs.myPage.getBoundingClientRect()
       console.log('showNodeMenus:', _base_position)
       this.isShowNodeTipsPanel = true
     },
     showNodeMenus(nodeObject, $event) {
-      this.currentNode = nodeObject
+      this.current_node = nodeObject
       var _base_position = this.$refs.myPage.getBoundingClientRect()
       console.log('showNodeMenus:', $event, _base_position)
       this.isShowNodeMenuPanel = true
@@ -446,29 +476,28 @@ export default {
     doAction(actionName) {
       if(actionName == 'details'){
         this.isShowNodeMenuPanel = false
-        this.showNodeTips(this.currentNode)
+        this.showNodeTips(this.current_node)
       }
       if(actionName == 'setRoot'){
         this.isShowNodeMenuPanel = false
         this.$router.push({
           path: this.route,
-          query:{root:this.currentNode.text,
-                 type:this.currentNode.data.type
+          query:{root:this.current_node.text,
+                 type:this.current_node.data.type
           }
         })
       }
     },*/
-
-
-
-    async search_from(type,id){
+    
+    //把查询得到的相邻的节点和边放入data_buffer
+    async load_data_to_buffer(type,id){
       var buffer = {}
       var type_dict = {} // id -> node_type
       await this.get_nodes_links(type, id).then(res=>{
-        console.log(res)
         var nodes = res['nodes']
         var edges = res['edges']
         if(nodes.length == 0){return}   
+        //节点放入buffer
         for(var i=0; i < nodes.length; i++){
           var key = nodes[i].data.type
           type_dict[nodes[i].id] = key
@@ -478,6 +507,7 @@ export default {
             buffer[key] = [[[nodes[i]]],0]
           }
         }
+        //边放入buffer
         for(var j=0; j < edges.length; j++){
           var neighbor_id 
           if(edges[j]['from'] == id){
@@ -485,7 +515,7 @@ export default {
           }else{
             neighbor_id = edges[j]['from']
           }
-          if(neighbor_id == undefined){continue}
+          if(neighbor_id == undefined){continue} //edge为{}
           for(var k=0; k < buffer[type_dict[neighbor_id]][0].length; k++){
             if(buffer[type_dict[neighbor_id]][0][k][0].id == neighbor_id){
               buffer[type_dict[neighbor_id]][0][k].push(edges[j])
@@ -493,6 +523,7 @@ export default {
             }
           }
         }
+        //删除 [node,]的情况，由于重复边会parse返回为{}，不删除这种情况会出错误。正常情况为[node,edge]对应
         for(var key in buffer){
           var tmp = []
           for(var i=0; i<buffer[key][0].length; i++){
@@ -502,13 +533,9 @@ export default {
           }
           buffer[key][0] = tmp
         }
-        //
         this.data_buffer[id] = buffer
       })
     },
-
-    //从data_buffer中，加载num个与id相连的类型为type的节点
-
 
     // 计算id节点的相邻节点(类型为type)中还有多少没有加载
     count_type_remain(id, type){
@@ -524,8 +551,9 @@ export default {
       return count
     },
 
-    //
-    async graph_data_loader(id, num, key_list){
+    //key_list 为一个节点类别数组，从这些类里中，加载共num个与id相连的节点，加载的方式是尽量让每种类别数目均衡
+    // !!!!!!由于该函数包括while循环，调用时务必保证num要小于能加载的数量
+    async data_loader(id, num, key_list){
       var remain_to_load = num
       var key_idx = 0
       while(remain_to_load > 0){
@@ -536,7 +564,8 @@ export default {
         key_idx = (key_idx + 1) % key_list.length
       }
     },
-
+    
+    //从data_buffer中，加载num个与id相连的类型为type的节点
     async load_data_from_buffer(id, type, num){
       var current = this.data_buffer[id][type]
       var to_load = []
@@ -556,26 +585,30 @@ export default {
       }
       await this.$refs.seeksRelationGraph.appendJsonData({'nodes':nodes, 'links':links}, (seeksRGGraph) => {})
     },
-
-    async searchFrom(type,id){
-      await this.search_from(type, id)
+    
+    //从后端获取数据,并处理显示相邻节点逻辑
+    async get_data_from(type,id){
+      //获取数据，放入buffer
+      await this.load_data_to_buffer(type, id)
       var remain = this.count_all_remain(id)
       var key_list = Object.keys(this.data_buffer[id])
+      //显示相邻节点逻辑
       if(remain <= this.load_num){
-        await this.graph_data_loader(id, remain, key_list)
+        await this.data_loader(id, remain, key_list)
       }else{
         var left = remain-this.load_num
-        await this.graph_data_loader(id,this.load_num, key_list)
+        await this.data_loader(id,this.load_num, key_list)
         var load_more = {'nodes':[{'id':id + 'load_all', 'text':"加载剩余("+left+')', data:{'type':'加载'}, 'color':'white', borderColor: 'black'}],
                          'links':[{'from':id, 'to':id + 'load_all', 'text':'加载'}]}
         this.$refs.seeksRelationGraph.appendJsonData(load_more, (seeksRGGraph) => {})
       }
+      //更新筛选显示数据
       if(this.route == '/graph'){
         this.refresh_types()
       }else{
         var types = Object.keys(this.data_buffer[id])
         for(var i=0; i<types.length;i++){
-          var tmp = this.test(types[i])
+          var tmp = this.get_all_num_by_type(types[i])
           this.all_node_types.push(tmp)
           this.node_checkList.push(tmp)
         }
@@ -620,7 +653,9 @@ export default {
       this.rel_checkList = all_link_types
       this.all_rel_type = all_link_types
     },
-
+    
+    //筛选节点和边
+    //处理逻辑为透明度和隐藏
     doFilter() {
       var _all_nodes = this.$refs.seeksRelationGraph.getNodes()
       var _all_lines = this.$refs.seeksRelationGraph.getLines()
@@ -644,45 +679,40 @@ export default {
         })
       })
     },
+    
+    //点击节点展开按钮
     onNodeExpand(node) {
-        if(node.data.needLoad){
-          this.g_loading = true
-          node.data.needLoad = false
-          this.searchFrom(node.data.type, node.id)         
-        }else{
-          this.$refs.seeksRelationGraph.refresh()
-        }
+      if(node.data.need_load){
+        node.data.need_load = false
+        this.get_data_from(node.data.type, node.id)         
+      }else{
+        this.$refs.seeksRelationGraph.refresh()
+      }
     },
-
 //------------------------------------------------------------------------------树形界面涉及函数-----------------------------------------------------------------------------------
-
-    test(name){
-      var len = this.data_buffer[this.rootNode.id][name][0].length
+    //用于树形布局中，筛选type的()中显示。标志该类别相邻节点一共多少个
+    get_all_num_by_type(name){
+      var len = this.data_buffer[this.root_node.id][name][0].length
       return name + '(' + len + ')'
     },
     
-    setTreeData(value){
-      var diff = value.concat(this.last_checklist).filter(v => !value.includes(v) || !this.last_checklist.includes(v))
+    //树形布局，当筛选打钩变化时调用
+    tree_change_data(value){
+      //获得需要变化的type
+      var diff = value.concat(this.last_checklist).filter(v => !value.includes(v) || !this.last_checklist.includes(v)) //差集
       var change = diff[0].substr(0,diff[0].indexOf('('))
       var isHide = true
-      if(value.length > this.last_checklist.length) {isHide = false}
+      var key_list = this.get_selected_types()
+      if(value.length > this.last_checklist.length) {isHide = false} 
       var all_nodes = this.$refs.seeksRelationGraph.getNodes()
-      var to_load
       for(var i=0; i<all_nodes.length; i++){
-        if(all_nodes[i].id == this.rootNode.id +'load_all'){
-          var count = 0 
-          for(var j=0; j<value.length; j++){
-            count += this.count_type_remain(this.rootNode.id, value[j].substr(0,value[j].indexOf('(')))
-          }
-          if(count > 0){
-            all_nodes[i].isHide = false
-            all_nodes[i].text = '加载剩余('+count+')'
-          }else{
-            all_nodes[i].isHide = true
-          }
+        //加载剩余的节点进行变化
+        if(all_nodes[i].id == this.root_node.id +'load_all'){
+          this.remain_node_change(all_nodes[i].id, this.root_node.id, key_list)
         }
+        //对变化的type的节点进行显现、隐藏操作
         if(all_nodes[i].data.type == change){
-          if(all_nodes[i].id == this.rootNode.id){
+          if(all_nodes[i].id == this.root_node.id){
             all_nodes[i].isHide = false
           }else{
             all_nodes[i].isHide = isHide
@@ -692,7 +722,9 @@ export default {
       this.last_checklist = value
       this.$refs.seeksRelationGraph.refresh()
     },
-
+    
+    //树形布局中，获取选中的type的数组
+    //由于node_checkList实际存的是 type(num)，需此函数获得type
     get_selected_types(){
       var types = []
       for(var i=0; i<this.node_checkList.length; i++){
@@ -719,7 +751,6 @@ export default {
       text-overflow: ellipsis;
       overflow: hidden;
       line-height: normal;
-
   }
   .type {
       font-size: 8px;
