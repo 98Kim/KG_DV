@@ -11,9 +11,9 @@
       
       <div style="float:right; display: inline-block; width:300px">
         <div style="line-height: 20px; font-size: 16px; display: inline-block;"><b>搜索：</b></div>
-        <el-autocomplete v-model="state"  size="mini" :fetch-suggestions="query_search" placeholder="请输入要查找的节点" @select="handleSelect" :debounce="0" :trigger-on-focus="false" clearable @clear="blurForBug()">
+        <el-autocomplete v-model="place_holder"  size="mini" :fetch-suggestions="query_search" placeholder="请输入要查找的节点" @select="handleSelect" :debounce="0" :trigger-on-focus="false" clearable @clear="blurForBug()">
           <div><span>更多</span></div>
-          <template slot-scope="{ item }" >
+          <template slot-scope="{item}" >
             <div style="height:45px margin-top:10px">
               <div class="name" v-bind:style="{ color: colorDict[item.data.type]}"  >{{ item.value }}</div>
               <div class="type"><span>{{ item.data.type }}</span></div>
@@ -24,11 +24,9 @@
       </div>
   
       <div v-if="route =='/graph'" style="margin-top:10px">
-        
-        <div v-if="all_node_type.length > 0 " style="line-height: 20px; font-size: 16px;"><b>节点筛选</b></div>
+        <div v-if="all_node_types.length > 0 " style="line-height: 20px; font-size: 16px;"><b>节点筛选</b></div>
         <el-checkbox-group v-model="node_checkList" @change="doFilter">
-          <el-checkbox v-for="thisItem in all_node_type" :key="thisItem" :label="thisItem" />
-
+          <el-checkbox v-for="thisItem in all_node_types" :key="thisItem" :label="thisItem" />
         </el-checkbox-group>
       </div>
 
@@ -41,9 +39,9 @@
       </div>
       
       <div v-if="route =='/tree'" style="margin-top:30px">
-        <div v-if="all_neighbor_type.length > 0" style="line-height: 20px; font-size: 16px;" ><b>筛选</b></div>
-        <el-checkbox-group v-model="neighbor_checkList"  @change="setTreeData">
-          <el-checkbox v-for="thisItem in all_neighbor_type" :key="thisItem" :label="test(thisItem)"/>
+        <div v-if="all_node_types.length > 0" style="line-height: 20px; font-size: 16px;" ><b>筛选</b></div>
+        <el-checkbox-group v-model="node_checkList"  @change="setTreeData">
+          <el-checkbox v-for="thisItem in all_node_types" :key="thisItem" :label="thisItem"/>
         </el-checkbox-group>
       </div>
       
@@ -103,14 +101,12 @@ export default {
       nodes_buffer : {},
       route:'/graph',
       node_checkList:[],
-      all_node_type:[],
+      all_node_types:[],
       rel_checkList: [],
       all_rel_type: [],
       links_id: [],
-      neighbor_checkList: [],
-      all_neighbor_type: [],
       last_checklist: [],
-      state:'',
+      place_holder:'',
       load_num: 6,
       data_buffer: {}, // 当搜索某一节点相连的所有节点和边时，一次性将数据放到这里。格式为 {'节点id':{'相邻节点类型':[ [[node1,edge1],[node2,edge2],...],   from]}    }
                        // 其中from为该从哪里继续加载节点和边，初始为0。node和edge成对出现(因为edge的另一侧是节点id)
@@ -128,7 +124,6 @@ export default {
         '#76e9f9' //cyan400
       ],
       colorDict : {},
-      neighbor_buffer: {},
       graph_op: {
         defaultNodeBorderWidth: 1,
         defaultNodeFontColor: 'black',
@@ -145,7 +140,6 @@ export default {
           }
         ],
         defaultJunctionPoint: 'border'
-        // 这里可以参考"Graph 图谱"中的参数进行设置
       },
       tree_op: {
         defaultNodeBorderWidth: 1,
@@ -154,7 +148,6 @@ export default {
         defaultLineShape: 1,
         defaultNodeShape: 1,
         defaultNodeFontColor:'black',
-        
         'layouts': [
 
           {
@@ -162,7 +155,6 @@ export default {
             'layoutName': 'tree',
             'layoutClassName': 'seeks-layout-center',
             'from': 'left',
-            
             'defaultLineShape': 1,
             'min_per_width': 200,
             'max_per_width': 400,
@@ -171,9 +163,7 @@ export default {
           }
         ],
         defaultJunctionPoint: 'border'
-        // 这里可以参考"Graph 图谱"中的参数进行设置
       }
-
     }
   },
   created() {
@@ -192,56 +182,47 @@ export default {
     //当路径变化时，重新加载根节点和对应的数据
     //重新设置根节点时的函数调用实际为更改路径，该函数会自动根据路径变化进行调整
     listen_to_set(){
-      var search = this.$route.query.root  
-      this.state = search
-      var type = this.$route.query.type
+      var search = this.$route.query.root
+      this.place_holder = search
+      this.data_buffer = {}
       this.route = this.$route.path
-      this.neighbor_buffer = {}
       this.last_checklist = []
-      this.all_neighbor_type = []
-      this.neighbor_checkList = []
+      this.links_id = []
+      this.node_checkList = []
+      this.all_node_types = []
+      this.rel_checkList = []
+      this.all_rel_type = []
+
       if(this.$route.path == '/'){this.route = '/graph'}
-      var root
-      this.get_query_nodes(search).then(res =>{
-        //根据路径信息，选择根节点的处理逻辑
-        //通过目前的API查找，返回值有可能不唯一
+      this.set_layout(this.route)
+      this.get_query_nodes(search)
+      .then(res=>{
+        var root
         if(res.length == 1){
           root = res[0]
         }else{
           if(res.length > 1){
             for(var i=0; i < res.length; i++){
-              if(res[i]['data']['type']== type && res[i]['text']==search){
+              if(res[i]['data']['type']== this.$route.query.type && res[i]['text']==search){
                 root = res[i]
                 break
               }  
             } 
           }
-        }        
-        if(!root){return}
-        this.rootNode = root
-        this.set_layout(this.route)
-        var __graph_json_data = {'rootId':root['id'], 'nodes':[root], links:[]}
-        this.$refs.seeksRelationGraph.setJsonData(__graph_json_data, (seeksRGGraph) => {
-          this.links_id = []
-          if(this.$route.path == '/graph'){
-            this.refresh_types()
-          }
-          if(this.$route.path == '/tree'){
-            this.load_neighbor_buffer(type,root.id)
-          }
-        }).catch((err) => {
-          console.log(err)
-        })
+        }
+        return root})
+      .then(res=>{
+        if(res != undefined){
+          var root = res
+          this.rootNode = root
+          var __graph_json_data = {'rootId':root['id'], 'nodes':[root], links:[]}
+          this.$refs.seeksRelationGraph.setJsonData(__graph_json_data, (seeksRGGraph) => {
+            var root = this.$refs.seeksRelationGraph.getNodeById(this.rootNode.id)
+            root['expanded'] = true 
+            this.searchFrom(this.rootNode.data.type, this.rootNode.id)
+          })
+        }
       })
-    },
-
-    // 在更换布局，更换根节点时，一些data()中的数据初始化
-    graph_init(){
-
-    },
-
-    tree_init(){
-
     },
 
     //根据路径设置布局 图、树
@@ -263,6 +244,8 @@ export default {
 
     //点击布局按钮进行布局路径跳转
     change_layout(){ 
+      this.node_checkList = []
+      this.all_node_types = []
       this.$router.push({
           path: this.route,
           query:{root:this.rootNode.text,
@@ -391,224 +374,44 @@ export default {
       }
     },
 
-    //------------------------------------------------------------------------------图形界面涉及函数-----------------------------------------------------------------------------------
-    
-    //返回当前已加载节点的所有类型，用于节点筛选
-    get_all_node_types(){
-      var type_dict = {}
-      var all_nodes = this.$refs.seeksRelationGraph.getNodes()
-      all_nodes.forEach(this_node => {
-        if(this_node.data.type in type_dict == false && this_node.data.type!= undefined){
-          type_dict[this_node.data.type] = 1
-        }
-      })
-      return Object.keys(type_dict)
-    },
-    
-    //返回当前已加载边的所有类型，用于边筛选
-    get_all_rel_types(){
-      var type_dict = {}
-      var all_links = this.$refs.seeksRelationGraph.getLines()
-      //line, link实际不是一个东西，这里参考了文档的调用方法
-      all_links.forEach(this_line => {
-        this_line.relations.forEach(this_link => {
-          if(this_link.text in type_dict == false && this_link.text != ''){
-            type_dict[this_link.text] = 1
-          }
-        })
-      })
-      return Object.keys(type_dict)
-    },
-    
-    //当图形界面数据更新时调用，获得数据中所有的点、边类型，用于筛选
-    refresh_types(){
-      var all_node_types = this.get_all_node_types()
-      this.node_checkList = all_node_types
-      this.all_node_type = all_node_types    
-      var all_link_types = this.get_all_rel_types()
-      this.rel_checkList = all_link_types
-      this.all_rel_type = all_link_types
-    },
-
-    test(name){
-      var len = this.neighbor_buffer[name]['nodes'].length
-      return name + '(' + len + ')'
-    },
-    
-    load_neighbor_buffer(type,id){
-      var typeDict = {}
-      this.get_nodes_links(type, id).then(res=>{
-        var nodes = res['nodes']
-        var edges = res['edges']
-        for(var i=0; i < nodes.length; i++){
-          nodes[i]['isHide'] = true
-          var key = nodes[i].data.type
-          typeDict[nodes[i].id] = key
-          if(key in this.neighbor_buffer){
-            this.neighbor_buffer[key]['nodes'].push(nodes[i])
-          }else{
-            this.neighbor_buffer[key] = {}
-            this.neighbor_buffer[key]['nodes'] = [nodes[i]]
-            this.neighbor_buffer[key]['links'] = []
-          }
-        }
-      this.neighbor_checkList = []
-        this.all_neighbor_type = Object.keys(this.neighbor_buffer)
-        for(var j=0; j < edges.length; j++){
-          var neighbor_id 
-          if(edges[j]['from'] == id){
-            neighbor_id = edges[j]['to']
-          }else{
-            neighbor_id = edges[j]['from']
-          }
-          this.neighbor_buffer[typeDict[neighbor_id]]['links'].push(edges[j])
-        }
-        console.log(this.neighbor_buffer)
-        for(var key in this.neighbor_buffer){
-          this.$refs.seeksRelationGraph.appendJsonData(this.neighbor_buffer[key], (seeksRGGraph) => {})
-        }
-      })
-    },
-
-    setTreeData(value){
-      if(value.length > this.last_checklist.length){     
-        for(var i=0; i<value.length;i++){
-          if(!(this.last_checklist.includes(value[i]))){
-            this.last_checklist = value
-            var key = value[i].substr(0,value[i].indexOf('('))
-            console.log(key)
-            var all_nodes = this.$refs.seeksRelationGraph.getNodes()
-            for(var j=0; j<all_nodes.length; j++){
-              
-              if(all_nodes[j].data.type == key){
-                all_nodes[j].isHide = false
-              }
-            }
-            this.$refs.seeksRelationGraph.refresh()
-            break
-          }
-        }
-      }else{
-        for(var i=0; i<this.last_checklist.length;i++){
-          if(!(value.includes(this.last_checklist[i]))){
-            var del = this.last_checklist[i].substr(0,this.last_checklist[i].indexOf('('))
-            this.last_checklist = value
-            for(var j=0; j<this.neighbor_buffer[del]['nodes'].length; j++){
-              var tmp = this.$refs.seeksRelationGraph.getNodeById(this.neighbor_buffer[del]['nodes'][j].id)
-              tmp['isHide'] = true
-            }
-            this.$refs.seeksRelationGraph.refresh()
-            break
-          }
-        }
-      }
-    },
-
-    doFilter() {
-      var _all_nodes = this.$refs.seeksRelationGraph.getNodes()
-      var _all_lines = this.$refs.seeksRelationGraph.getLines()
-      _all_nodes.forEach(thisNode => {
-        var _isHideThisLine = false
-        if (this.node_checkList.indexOf(thisNode.data['type']) === -1) {
-          _isHideThisLine = true
-        }
-        thisNode.opacity = _isHideThisLine ? 0.1 : 1
-      })
-      _all_lines.forEach(thisLine => {
-        // 注意这里的line和json数据中link不一样，一条线（line）上可以附着多条关系(link),可以通过line.relations获取到这条线上所有的关系数据(link)
-        var _isHideThisLine = true
-        thisLine.relations.forEach(thisLink => {
-          if (this.rel_checkList.indexOf(thisLink['text']) === -1) {
-            thisLink.isHide = true
-          } else {
-            _isHideThisLine = false
-            thisLink.isHide = false
-          }
-        })
-      })
-    },
-    
     onNodeClick(nodeObject, $event) {
       this.currentNode = nodeObject
-      //console.log(this.currentNode.id)
       if(this.currentNode.text.indexOf('加载剩余') != -1){
         var from_id = this.currentNode.id.slice(0, this.currentNode.id.indexOf('load_all'))
         var remain = this.count_all_remain(from_id)
-        console.log(remain)
+        if(this.route == '/tree'){
+          var key_list = this.get_selected_types()
+        }else{
+          var key_list = Object.keys(this.data_buffer[from_id])
+        }
         if(remain <= this.load_num){
           this.$refs.seeksRelationGraph.removeNodeById(this.currentNode.id)
-          this.graph_data_loader(from_id, remain)
-          console.log(this.currentNode.id)
-          
+          this.graph_data_loader(from_id, remain, key_list)
         }else{
           var left = remain-this.load_num
-          
-          this.graph_data_loader(from_id, this.load_num)
+          this.graph_data_loader(from_id, this.load_num, key_list)
           this.currentNode['text'] = "加载剩余(" + left +')'
-        }
-        //var data = this.$refs.seeksRelationGraph.getGraphJsonData()
-
-        
-
-        //console.log(from_id)
-        
-        //for(var )
-        
-        
-        }
-
-
-
-
-
-
-        /*
-        this.$refs.seeksRelationGraph.appendJsonData(this.nodes_buffer[this.currentNode.id], (seeksRGGraph) => {
-          this.$refs.seeksRelationGraph.removeNodeById(this.currentNode.id)
-        })*/
-
-        else{
-        var _base_position = this.$refs.myPage.getBoundingClientRect()
-        console.log('showNodeMenus:', $event, _base_position)
-        this.isShowNodeMenuPanel = true
-        this.nodeMenuPanelPosition.x = $event.clientX - _base_position.x
-        this.nodeMenuPanelPosition.y = $event.clientY - _base_position.y
-        console.log('onNodeClick:', nodeObject)
-
-      }
-    },
-    onLineClick(lineObject, $event) {
-      console.log('onLineClick:', lineObject)
-    },
-    showNodeTips(nodeObject) {
-      this.currentNode = nodeObject
-      var _base_position = this.$refs.myPage.getBoundingClientRect()
-      console.log('showNodeMenus:', _base_position)
-      this.isShowNodeTipsPanel = true
-    },
-    showNodeMenus(nodeObject, $event) {
-      this.currentNode = nodeObject
-      var _base_position = this.$refs.myPage.getBoundingClientRect()
-      console.log('showNodeMenus:', $event, _base_position)
-      this.isShowNodeMenuPanel = true
-      this.nodeMenuPanelPosition.x = $event.clientX - _base_position.x
-      this.nodeMenuPanelPosition.y = $event.clientY - _base_position.y
-    },
-
-    doAction(actionName) {
-      if(actionName == 'details'){
-        this.isShowNodeMenuPanel = false
-        this.showNodeTips(this.currentNode)
-      }
-      if(actionName == 'setRoot'){
-        this.isShowNodeMenuPanel = false
+        }                
+      }else{
         this.$router.push({
           path: this.route,
           query:{root:this.currentNode.text,
                  type:this.currentNode.data.type
           }
         })
+        /*  
+        var _base_position = this.$refs.myPage.getBoundingClientRect()
+        console.log('showNodeMenus:', $event, _base_position)
+        this.isShowNodeMenuPanel = true
+        this.nodeMenuPanelPosition.x = $event.clientX - _base_position.x
+        this.nodeMenuPanelPosition.y = $event.clientY - _base_position.y
+        console.log('onNodeClick:', nodeObject)*/
+
       }
+    },
+
+    onLineClick(lineObject, $event) {
+      console.log('onLineClick:', lineObject)
     },
 
     handleSelect(item) {
@@ -623,6 +426,40 @@ export default {
     blurForBug(){
       document.activeElement.blur()
     },
+
+    /*
+    showNodeTips(nodeObject) {
+      this.currentNode = nodeObject
+      var _base_position = this.$refs.myPage.getBoundingClientRect()
+      console.log('showNodeMenus:', _base_position)
+      this.isShowNodeTipsPanel = true
+    },
+    showNodeMenus(nodeObject, $event) {
+      this.currentNode = nodeObject
+      var _base_position = this.$refs.myPage.getBoundingClientRect()
+      console.log('showNodeMenus:', $event, _base_position)
+      this.isShowNodeMenuPanel = true
+      this.nodeMenuPanelPosition.x = $event.clientX - _base_position.x
+      this.nodeMenuPanelPosition.y = $event.clientY - _base_position.y
+    },
+    
+    doAction(actionName) {
+      if(actionName == 'details'){
+        this.isShowNodeMenuPanel = false
+        this.showNodeTips(this.currentNode)
+      }
+      if(actionName == 'setRoot'){
+        this.isShowNodeMenuPanel = false
+        this.$router.push({
+          path: this.route,
+          query:{root:this.currentNode.text,
+                 type:this.currentNode.data.type
+          }
+        })
+      }
+    },*/
+
+
 
     async search_from(type,id){
       var buffer = {}
@@ -642,7 +479,6 @@ export default {
           }
         }
         for(var j=0; j < edges.length; j++){
-          //console.log(edges[j])
           var neighbor_id 
           if(edges[j]['from'] == id){
             neighbor_id = edges[j]['to']
@@ -657,7 +493,6 @@ export default {
             }
           }
         }
-
         for(var key in buffer){
           var tmp = []
           for(var i=0; i<buffer[key][0].length; i++){
@@ -667,7 +502,7 @@ export default {
           }
           buffer[key][0] = tmp
         }
-        //console.log(buffer)
+        //
         this.data_buffer[id] = buffer
       })
     },
@@ -690,9 +525,8 @@ export default {
     },
 
     //
-    async graph_data_loader(id, num){
+    async graph_data_loader(id, num, key_list){
       var remain_to_load = num
-      var key_list = Object.keys(this.data_buffer[id])
       var key_idx = 0
       while(remain_to_load > 0){
         if(this.count_type_remain(id, key_list[key_idx]) > 0){
@@ -726,19 +560,90 @@ export default {
     async searchFrom(type,id){
       await this.search_from(type, id)
       var remain = this.count_all_remain(id)
-      console.log(remain)
+      var key_list = Object.keys(this.data_buffer[id])
       if(remain <= this.load_num){
-        await this.graph_data_loader(id, remain)
+        await this.graph_data_loader(id, remain, key_list)
       }else{
         var left = remain-this.load_num
-        await this.graph_data_loader(id,this.load_num)
+        await this.graph_data_loader(id,this.load_num, key_list)
         var load_more = {'nodes':[{'id':id + 'load_all', 'text':"加载剩余("+left+')', data:{'type':'加载'}, 'color':'white', borderColor: 'black'}],
                          'links':[{'from':id, 'to':id + 'load_all', 'text':'加载'}]}
         this.$refs.seeksRelationGraph.appendJsonData(load_more, (seeksRGGraph) => {})
       }
-      this.refresh_types()
+      if(this.route == '/graph'){
+        this.refresh_types()
+      }else{
+        var types = Object.keys(this.data_buffer[id])
+        for(var i=0; i<types.length;i++){
+          var tmp = this.test(types[i])
+          this.all_node_types.push(tmp)
+          this.node_checkList.push(tmp)
+        }
+        this.last_checklist = this.all_node_types
+      }
+    },
+    //------------------------------------------------------------------------------图形界面涉及函数-----------------------------------------------------------------------------------
+
+    //返回当前已加载节点的所有类型，用于节点筛选
+    get_all_node_types(){
+      var type_dict = {}
+      var all_nodes = this.$refs.seeksRelationGraph.getNodes()
+      all_nodes.forEach(this_node => {
+        if(this_node.data.type in type_dict == false && this_node.data.type!= undefined){
+          type_dict[this_node.data.type] = 1
+        }
+      })
+      return Object.keys(type_dict)
     },
     
+    //返回当前已加载边的所有类型，用于边筛选
+    get_all_rel_types(){
+      var type_dict = {}
+      var all_links = this.$refs.seeksRelationGraph.getLines()
+      //line, link实际不是一个东西，这里参考了文档的调用方法
+      all_links.forEach(this_line => {
+        this_line.relations.forEach(this_link => {
+          if(this_link.text in type_dict == false && this_link.text != ''){
+            type_dict[this_link.text] = 1
+          }
+        })
+      })
+      return Object.keys(type_dict)
+    },
+    
+    //当图形界面数据更新时调用，获得数据中所有的点、边类型，用于筛选
+    refresh_types(){
+      var all_node_types = this.get_all_node_types()
+      this.node_checkList = all_node_types
+      this.all_node_types = all_node_types    
+      var all_link_types = this.get_all_rel_types()
+      this.rel_checkList = all_link_types
+      this.all_rel_type = all_link_types
+    },
+
+    doFilter() {
+      var _all_nodes = this.$refs.seeksRelationGraph.getNodes()
+      var _all_lines = this.$refs.seeksRelationGraph.getLines()
+      _all_nodes.forEach(thisNode => {
+        var _isHideThisLine = false
+        if (this.node_checkList.indexOf(thisNode.data['type']) === -1) {
+          _isHideThisLine = true
+        }
+        thisNode.opacity = _isHideThisLine ? 0.1 : 1
+      })
+      _all_lines.forEach(thisLine => {
+        // 注意这里的line和json数据中link不一样，一条线（line）上可以附着多条关系(link),可以通过line.relations获取到这条线上所有的关系数据(link)
+        var _isHideThisLine = true
+        thisLine.relations.forEach(thisLink => {
+          if (this.rel_checkList.indexOf(thisLink['text']) === -1) {
+            thisLink.isHide = true
+          } else {
+            _isHideThisLine = false
+            thisLink.isHide = false
+          }
+        })
+      })
+    },
     onNodeExpand(node) {
         if(node.data.needLoad){
           this.g_loading = true
@@ -747,13 +652,58 @@ export default {
         }else{
           this.$refs.seeksRelationGraph.refresh()
         }
-    }
+    },
+
+//------------------------------------------------------------------------------树形界面涉及函数-----------------------------------------------------------------------------------
+
+    test(name){
+      var len = this.data_buffer[this.rootNode.id][name][0].length
+      return name + '(' + len + ')'
+    },
+    
+    setTreeData(value){
+      var diff = value.concat(this.last_checklist).filter(v => !value.includes(v) || !this.last_checklist.includes(v))
+      var change = diff[0].substr(0,diff[0].indexOf('('))
+      var isHide = true
+      if(value.length > this.last_checklist.length) {isHide = false}
+      var all_nodes = this.$refs.seeksRelationGraph.getNodes()
+      var to_load
+      for(var i=0; i<all_nodes.length; i++){
+        if(all_nodes[i].id == this.rootNode.id +'load_all'){
+          var count = 0 
+          for(var j=0; j<value.length; j++){
+            count += this.count_type_remain(this.rootNode.id, value[j].substr(0,value[j].indexOf('(')))
+          }
+          if(count > 0){
+            all_nodes[i].isHide = false
+            all_nodes[i].text = '加载剩余('+count+')'
+          }else{
+            all_nodes[i].isHide = true
+          }
+        }
+        if(all_nodes[i].data.type == change){
+          if(all_nodes[i].id == this.rootNode.id){
+            all_nodes[i].isHide = false
+          }else{
+            all_nodes[i].isHide = isHide
+          }
+        }
+      }
+      this.last_checklist = value
+      this.$refs.seeksRelationGraph.refresh()
+    },
+
+    get_selected_types(){
+      var types = []
+      for(var i=0; i<this.node_checkList.length; i++){
+        types.push(this.node_checkList[i].substr(0,this.node_checkList[i].indexOf('(')))
+      }
+      return types
+    }    
   }
 }
 </script>
-
 <!-- Add "scoped" attribute to limit CSS to this component only -->
-
 <style lang="scss" scoped>
 .c-node-menu-item{
   line-height: 30px;padding-left: 10px;cursor: pointer;color: #444444;font-size: 14px;border-top:#efefef solid 1px;
